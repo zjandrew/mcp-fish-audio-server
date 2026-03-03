@@ -85,6 +85,25 @@ export class TTSTool {
         type: 'boolean',
         description: 'Automatically play the generated audio (optional)',
         default: false
+      },
+      speed: {
+        type: 'number',
+        description: 'Speaking rate multiplier (0.5=half speed, 1.0=normal, 2.0=double speed)',
+        minimum: 0.5,
+        maximum: 2.0,
+        default: 1.0
+      },
+      volume: {
+        type: 'number',
+        description: 'Volume adjustment in dB (0=no change, positive=louder, negative=quieter)',
+        default: 0
+      },
+      temperature: {
+        type: 'number',
+        description: 'Expressiveness/emotion control (0=consistent and calm, 1=varied and emotional)',
+        minimum: 0,
+        maximum: 1,
+        default: 0.7
       }
     },
     required: ['text']
@@ -151,7 +170,10 @@ export class TTSTool {
         mp3Bitrate: (input.mp3_bitrate || config.mp3Bitrate) as Mp3Bitrate,
         normalize: input.normalize !== false,
         latency: (input.latency || 'balanced') as LatencyMode,
-        streaming: input.streaming ?? config.streaming
+        streaming: input.streaming ?? config.streaming,
+        speed: input.speed,
+        volume: input.volume,
+        temperature: input.temperature,
       };
 
       // Determine output path

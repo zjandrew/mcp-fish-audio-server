@@ -4,7 +4,7 @@
   <img src="./dcos/icon_fish-audio.webp" alt="Fish Audio Logo" width="300" height="300" />
 </div>
 
-[![npm version](https://badge.fury.io/js/@alanse%2Ffish-audio-mcp-server.svg)](https://badge.fury.io/js/@alanse%2Ffish-audio-mcp-server) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://badge.fury.io/js/@zjandrew%2Ffish-audio-mcp-server.svg)](https://badge.fury.io/js/@zjandrew%2Ffish-audio-mcp-server) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
 An MCP (Model Context Protocol) server that provides seamless integration between Fish Audio's Text-to-Speech API and LLMs like Claude, enabling natural language-driven speech synthesis.
@@ -39,13 +39,13 @@ This MCP server brings Fish Audio's powerful capabilities directly to your LLM w
 You can run this MCP server directly using npx:
 
 ```bash
-npx @alanse/fish-audio-mcp-server
+npx @zjandrew/fish-audio-mcp-server
 ```
 
 Or install it globally:
 
 ```bash
-npm install -g @alanse/fish-audio-mcp-server
+npm install -g @zjandrew/fish-audio-mcp-server
 ```
 
 ### Configuration
@@ -66,7 +66,7 @@ export FISH_API_KEY=your_fish_audio_api_key_here
   "mcpServers": {
     "fish-audio": {
       "command": "npx",
-      "args": ["-y", "@alanse/fish-audio-mcp-server"],
+      "args": ["-y", "@zjandrew/fish-audio-mcp-server"],
       "env": {
         "FISH_API_KEY": "your_fish_audio_api_key_here",
         "FISH_MODEL_ID": "speech-1.6",
@@ -89,7 +89,7 @@ export FISH_API_KEY=your_fish_audio_api_key_here
   "mcpServers": {
     "fish-audio": {
       "command": "npx",
-      "args": ["-y", "@alanse/fish-audio-mcp-server"],
+      "args": ["-y", "@zjandrew/fish-audio-mcp-server"],
       "env": {
         "FISH_API_KEY": "your_fish_audio_api_key_here",
         "FISH_MODEL_ID": "speech-1.6",
@@ -175,6 +175,9 @@ Generates speech from text using Fish Audio's TTS API.
 - `auto_play` (optional): Automatically play the generated audio
 - `websocket_streaming` (optional): Use WebSocket streaming instead of HTTP
 - `realtime_play` (optional): Play audio in real-time during WebSocket streaming
+- `speed` (optional): Speaking rate multiplier (0.5=half speed, 1.0=normal, 2.0=double speed)
+- `volume` (optional): Volume adjustment in dB (0=no change, positive=louder, negative=quieter)
+- `temperature` (optional): Expressiveness/emotion control (0=consistent, 1=emotional, default: 0.7)
 
 **Voice Selection Priority**: reference_id > reference_name > reference_tag > default
 
@@ -278,6 +281,18 @@ Claude: I'll stream the speech via WebSocket and play it in real-time.
 [Uses fish_audio_tts tool with websocket_streaming: true, realtime_play: true]
 
 Result: Audio streamed and played in real-time via WebSocket
+```
+
+#### Adjusting Speed, Volume, and Expressiveness
+
+```
+User: "Generate speech saying 'Breaking news!' at 1.5x speed with high emotion"
+
+Claude: I'll generate expressive, fast-paced speech.
+
+[Uses fish_audio_tts tool with text, speed: 1.5, temperature: 0.9]
+
+Result: Audio generated with increased speed and expressiveness
 ```
 
 ## Development

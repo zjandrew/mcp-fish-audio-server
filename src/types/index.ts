@@ -33,6 +33,9 @@ export interface TTSParams {
   chunkLength?: number;
   streaming?: boolean;
   websocketStreaming?: boolean;
+  speed?: number;
+  volume?: number;
+  temperature?: number;
 }
 
 export interface TTSResponse {
@@ -55,6 +58,9 @@ export interface TTSToolParams {
   latency?: LatencyMode;
   output_path?: string;
   auto_play?: boolean;
+  speed?: number;
+  volume?: number;
+  temperature?: number;
 }
 
 export interface TTSToolResponse {

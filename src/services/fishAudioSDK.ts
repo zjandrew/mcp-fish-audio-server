@@ -1,13 +1,34 @@
 import { Session, WebSocketSession, TTSRequest, ReferenceAudio } from 'fish-audio-sdk';
-import { 
-  TTSParams, 
-  TTSResponse, 
+import type { TTSRequestOptions } from 'fish-audio-sdk/dist/schemas.js';
+import {
+  TTSParams,
+  TTSResponse,
   FishAudioError,
-  ErrorCode 
+  ErrorCode
 } from '../types/index.js';
 import { loadConfig } from '../utils/config.js';
 import { createWriteStream } from 'fs';
 import { Writable } from 'stream';
+
+/**
+ * Extended TTSRequest that adds temperature support on top of the SDK's native prosody support.
+ */
+class ExtendedTTSRequest extends TTSRequest {
+  private _temperature?: number;
+
+  constructor(text: string, options: TTSRequestOptions & { temperature?: number } = {}) {
+    const { temperature, ...sdkOptions } = options;
+    super(text, sdkOptions);
+    this._temperature = temperature;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      ...(this._temperature !== undefined && { temperature: this._temperature }),
+    };
+  }
+}
 
 export class FishAudioSDKService {
   private apiKey: string;
@@ -27,12 +48,19 @@ export class FishAudioSDKService {
       const session = new Session(this.apiKey);
       const chunks: Buffer[] = [];
 
-      const request = new TTSRequest(params.text, {
+      const request = new ExtendedTTSRequest(params.text, {
         referenceId: params.referenceId,
         format: params.format || 'mp3',
         mp3Bitrate: params.mp3Bitrate,
         normalize: params.normalize !== false,
         latency: params.latency || 'balanced',
+        ...(params.speed !== undefined || params.volume !== undefined ? {
+          prosody: {
+            speed: params.speed ?? 1,
+            volume: params.volume ?? 0,
+          }
+        } : {}),
+        temperature: params.temperature,
       });
 
       // Use the specified model
@@ -62,12 +90,19 @@ export class FishAudioSDKService {
       const writeStream = createWriteStream(outputPath);
       let totalBytes = 0;
 
-      const request = new TTSRequest(params.text, {
+      const request = new ExtendedTTSRequest(params.text, {
         referenceId: params.referenceId,
         format: params.format || 'mp3',
         mp3Bitrate: params.mp3Bitrate,
         normalize: params.normalize !== false,
         latency: params.latency || 'balanced',
+        ...(params.speed !== undefined || params.volume !== undefined ? {
+          prosody: {
+            speed: params.speed ?? 1,
+            volume: params.volume ?? 0,
+          }
+        } : {}),
+        temperature: params.temperature,
       });
 
       const headers = { model: this.modelId };
@@ -96,12 +131,19 @@ export class FishAudioSDKService {
     try {
       const ws = new WebSocketSession(this.apiKey);
 
-      const request = new TTSRequest('', {
+      const request = new ExtendedTTSRequest('', {
         referenceId: params.referenceId,
         format: params.format || 'opus', // Opus is better for streaming
         mp3Bitrate: params.mp3Bitrate,
         normalize: params.normalize !== false,
         latency: params.latency || 'balanced',
+        ...(params.speed !== undefined || params.volume !== undefined ? {
+          prosody: {
+            speed: params.speed ?? 1,
+            volume: params.volume ?? 0,
+          }
+        } : {}),
+        temperature: params.temperature,
       });
 
       const headers = { model: this.modelId };
