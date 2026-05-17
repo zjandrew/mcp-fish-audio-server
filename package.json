@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "fish-audio-mcp-server": "./dist/index.js"
+    "fish-audio-mcp-server": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
