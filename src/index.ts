@@ -10,6 +10,9 @@ import { TTSTool } from './tools/tts.js';
 import { ListReferencesTool } from './tools/listReferences.js';
 import { loadConfig } from './utils/config.js';
 import { logger } from './utils/logger.js';
+import { installStdioConsoleGuard } from './utils/stdioConsoleGuard.js';
+
+installStdioConsoleGuard();
 
 async function main() {
   try {
