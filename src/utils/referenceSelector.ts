@@ -63,6 +63,39 @@ export class ReferenceSelector {
   }
   
   /**
+   * Resolve a single speaker identifier (id, name, or tag) without falling back to default.
+   * Returns the resolved reference ID, or undefined if no configured reference matched
+   * AND no references are configured at all (in which case the identifier is treated as a raw ID).
+   */
+  resolveSpeaker(identifier: string): string | undefined {
+    if (this.references.length === 0) {
+      // No configured references: treat the identifier as a raw API reference_id.
+      return identifier;
+    }
+    return (
+      this.findById(identifier)?.id ||
+      this.findByName(identifier)?.id ||
+      this.findByTag(identifier)?.id
+    );
+  }
+
+  /**
+   * Resolve an ordered list of speaker identifiers into reference IDs.
+   * Throws if any identifier cannot be resolved.
+   */
+  selectMany(identifiers: string[]): string[] {
+    const ids: string[] = [];
+    for (const ident of identifiers) {
+      const resolved = this.resolveSpeaker(ident);
+      if (!resolved) {
+        throw new Error(`No reference found matching speaker: ${ident}`);
+      }
+      ids.push(resolved);
+    }
+    return ids;
+  }
+
+  /**
    * Get all available references
    */
   getAllReferences(): ReferenceConfig[] {

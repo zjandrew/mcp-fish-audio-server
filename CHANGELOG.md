@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-05-18
+
+### Changed
+- Default `FISH_MODEL_ID` is now `s2-pro` (was `s1`). Override with `FISH_MODEL_ID=s1` to keep the previous model.
+- `latency` now accepts `low` in addition to `balanced` and `normal`, matching the current Fish Audio API.
+
+### Added
+- New TTS parameters surfaced through the tool schema and request body:
+  `opus_bitrate`, `sample_rate`, `normalize_loudness` (s2-pro only),
+  `top_p`, `chunk_length`, `max_new_tokens`, `repetition_penalty`,
+  `min_chunk_length`, `condition_on_previous_chunks`, `early_stop_threshold`.
+- Multi-speaker dialogue (s2-pro only): new `speakers: string[]` tool param.
+  Each entry is resolved by id → name → tag against `FISH_REFERENCES`
+  (or used as a raw `reference_id` when no references are configured).
+  The serialized request sends `reference_id` as an array and your `text`
+  drives speaker turns via `<|speaker:0|>`, `<|speaker:1|>`, ... tags.
+  Using `speakers` on a non-s2-pro model returns an error.
+
 ## [0.6.1] - 2025-01-04
 
 ### Fixed

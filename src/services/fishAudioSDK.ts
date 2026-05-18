@@ -10,22 +10,75 @@ import { loadConfig } from '../utils/config.js';
 import { createWriteStream } from 'fs';
 import { Writable } from 'stream';
 
+interface ExtendedOptions {
+  temperature?: number;
+  topP?: number;
+  maxNewTokens?: number;
+  repetitionPenalty?: number;
+  minChunkLength?: number;
+  conditionOnPreviousChunks?: boolean;
+  earlyStopThreshold?: number;
+  normalizeLoudness?: boolean;
+  /** Multi-speaker reference IDs (s2-pro only). When set, overrides the SDK's single referenceId in the serialized body. */
+  referenceIds?: string[];
+}
+
 /**
- * Extended TTSRequest that adds temperature support on top of the SDK's native prosody support.
+ * Extended TTSRequest that adds s2-pro-era parameters on top of the SDK's native fields.
+ * The SDK schema lags the public API, so we serialize the extras in toJSON().
  */
 class ExtendedTTSRequest extends TTSRequest {
-  private _temperature?: number;
+  private _extras: ExtendedOptions;
 
-  constructor(text: string, options: TTSRequestOptions & { temperature?: number } = {}) {
-    const { temperature, ...sdkOptions } = options;
+  constructor(text: string, options: TTSRequestOptions & ExtendedOptions = {}) {
+    const {
+      temperature,
+      topP,
+      maxNewTokens,
+      repetitionPenalty,
+      minChunkLength,
+      conditionOnPreviousChunks,
+      earlyStopThreshold,
+      normalizeLoudness,
+      referenceIds,
+      ...sdkOptions
+    } = options;
     super(text, sdkOptions);
-    this._temperature = temperature;
+    this._extras = {
+      temperature,
+      topP,
+      maxNewTokens,
+      repetitionPenalty,
+      minChunkLength,
+      conditionOnPreviousChunks,
+      earlyStopThreshold,
+      normalizeLoudness,
+      referenceIds,
+    };
   }
 
   toJSON() {
+    const base: any = super.toJSON();
+    const e = this._extras;
+
+    if (e.normalizeLoudness !== undefined && base.prosody) {
+      base.prosody = { ...base.prosody, normalize_loudness: e.normalizeLoudness };
+    }
+
+    // Multi-speaker (s2-pro): API accepts reference_id as an array of voice model IDs.
+    if (e.referenceIds && e.referenceIds.length > 0) {
+      base.reference_id = e.referenceIds;
+    }
+
     return {
-      ...super.toJSON(),
-      ...(this._temperature !== undefined && { temperature: this._temperature }),
+      ...base,
+      ...(e.temperature !== undefined && { temperature: e.temperature }),
+      ...(e.topP !== undefined && { top_p: e.topP }),
+      ...(e.maxNewTokens !== undefined && { max_new_tokens: e.maxNewTokens }),
+      ...(e.repetitionPenalty !== undefined && { repetition_penalty: e.repetitionPenalty }),
+      ...(e.minChunkLength !== undefined && { min_chunk_length: e.minChunkLength }),
+      ...(e.conditionOnPreviousChunks !== undefined && { condition_on_previous_chunks: e.conditionOnPreviousChunks }),
+      ...(e.earlyStopThreshold !== undefined && { early_stop_threshold: e.earlyStopThreshold }),
     };
   }
 }
@@ -40,6 +93,42 @@ export class FishAudioSDKService {
     this.modelId = config.modelId;
   }
 
+  private buildRequest(params: TTSParams, defaultFormat: 'mp3' | 'opus' = 'mp3'): ExtendedTTSRequest {
+    const hasProsody =
+      params.speed !== undefined ||
+      params.volume !== undefined ||
+      params.normalizeLoudness !== undefined;
+
+    return new ExtendedTTSRequest(params.text, {
+      referenceId: params.referenceId,
+      referenceIds: params.referenceIds,
+      format: params.format || defaultFormat,
+      mp3Bitrate: params.mp3Bitrate,
+      opusBitrate: params.opusBitrate as any,
+      sampleRate: params.sampleRate,
+      normalize: params.normalize !== false,
+      // SDK type lags; the API accepts 'low' too.
+      latency: (params.latency || 'balanced') as any,
+      chunkLength: params.chunkLength,
+      ...(hasProsody
+        ? {
+            prosody: {
+              speed: params.speed ?? 1,
+              volume: params.volume ?? 0,
+            },
+          }
+        : {}),
+      temperature: params.temperature,
+      topP: params.topP,
+      maxNewTokens: params.maxNewTokens,
+      repetitionPenalty: params.repetitionPenalty,
+      minChunkLength: params.minChunkLength,
+      conditionOnPreviousChunks: params.conditionOnPreviousChunks,
+      earlyStopThreshold: params.earlyStopThreshold,
+      normalizeLoudness: params.normalizeLoudness,
+    });
+  }
+
   /**
    * Generate speech using standard HTTP API
    */
@@ -48,20 +137,7 @@ export class FishAudioSDKService {
       const session = new Session(this.apiKey);
       const chunks: Buffer[] = [];
 
-      const request = new ExtendedTTSRequest(params.text, {
-        referenceId: params.referenceId,
-        format: params.format || 'mp3',
-        mp3Bitrate: params.mp3Bitrate,
-        normalize: params.normalize !== false,
-        latency: params.latency || 'balanced',
-        ...(params.speed !== undefined || params.volume !== undefined ? {
-          prosody: {
-            speed: params.speed ?? 1,
-            volume: params.volume ?? 0,
-          }
-        } : {}),
-        temperature: params.temperature,
-      });
+      const request = this.buildRequest(params, 'mp3');
 
       // Use the specified model
       const headers = { model: this.modelId };
@@ -90,20 +166,7 @@ export class FishAudioSDKService {
       const writeStream = createWriteStream(outputPath);
       let totalBytes = 0;
 
-      const request = new ExtendedTTSRequest(params.text, {
-        referenceId: params.referenceId,
-        format: params.format || 'mp3',
-        mp3Bitrate: params.mp3Bitrate,
-        normalize: params.normalize !== false,
-        latency: params.latency || 'balanced',
-        ...(params.speed !== undefined || params.volume !== undefined ? {
-          prosody: {
-            speed: params.speed ?? 1,
-            volume: params.volume ?? 0,
-          }
-        } : {}),
-        temperature: params.temperature,
-      });
+      const request = this.buildRequest(params, 'mp3');
 
       const headers = { model: this.modelId };
 
@@ -131,20 +194,8 @@ export class FishAudioSDKService {
     try {
       const ws = new WebSocketSession(this.apiKey);
 
-      const request = new ExtendedTTSRequest('', {
-        referenceId: params.referenceId,
-        format: params.format || 'opus', // Opus is better for streaming
-        mp3Bitrate: params.mp3Bitrate,
-        normalize: params.normalize !== false,
-        latency: params.latency || 'balanced',
-        ...(params.speed !== undefined || params.volume !== undefined ? {
-          prosody: {
-            speed: params.speed ?? 1,
-            volume: params.volume ?? 0,
-          }
-        } : {}),
-        temperature: params.temperature,
-      });
+      // Opus is preferred for streaming; build with empty text since WS streams it in chunks.
+      const request = this.buildRequest({ ...params, text: '' }, 'opus');
 
       const headers = { model: this.modelId };
 

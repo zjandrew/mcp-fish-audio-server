@@ -21,13 +21,17 @@ export interface Config {
 
 export type AudioFormat = 'mp3' | 'wav' | 'pcm' | 'opus';
 export type Mp3Bitrate = 64 | 128 | 192;
-export type LatencyMode = 'normal' | 'balanced';
+export type OpusBitrate = -1000 | 24000 | 32000 | 48000 | 64000;
+export type LatencyMode = 'low' | 'normal' | 'balanced';
 
 export interface TTSParams {
   text: string;
   referenceId?: string;
+  referenceIds?: string[];
   format?: AudioFormat;
   mp3Bitrate?: Mp3Bitrate;
+  opusBitrate?: OpusBitrate;
+  sampleRate?: number;
   normalize?: boolean;
   latency?: LatencyMode;
   chunkLength?: number;
@@ -35,7 +39,14 @@ export interface TTSParams {
   websocketStreaming?: boolean;
   speed?: number;
   volume?: number;
+  normalizeLoudness?: boolean;
   temperature?: number;
+  topP?: number;
+  maxNewTokens?: number;
+  repetitionPenalty?: number;
+  minChunkLength?: number;
+  conditionOnPreviousChunks?: boolean;
+  earlyStopThreshold?: number;
 }
 
 export interface TTSResponse {
@@ -49,18 +60,29 @@ export interface TTSToolParams {
   reference_id?: string;
   reference_name?: string;
   reference_tag?: string;
+  speakers?: string[];
   streaming?: boolean;
   websocket_streaming?: boolean;
   realtime_play?: boolean;
   format?: AudioFormat;
   mp3_bitrate?: Mp3Bitrate;
+  opus_bitrate?: OpusBitrate;
+  sample_rate?: number;
   normalize?: boolean;
   latency?: LatencyMode;
   output_path?: string;
   auto_play?: boolean;
   speed?: number;
   volume?: number;
+  normalize_loudness?: boolean;
   temperature?: number;
+  top_p?: number;
+  chunk_length?: number;
+  max_new_tokens?: number;
+  repetition_penalty?: number;
+  min_chunk_length?: number;
+  condition_on_previous_chunks?: boolean;
+  early_stop_threshold?: number;
 }
 
 export interface TTSToolResponse {

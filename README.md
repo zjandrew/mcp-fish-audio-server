@@ -69,7 +69,7 @@ export FISH_API_KEY=your_fish_audio_api_key_here
       "args": ["-y", "@zhoujinandrew/fish-audio-mcp-server"],
       "env": {
         "FISH_API_KEY": "your_fish_audio_api_key_here",
-        "FISH_MODEL_ID": "speech-1.6",
+        "FISH_MODEL_ID": "s2-pro",
         "FISH_REFERENCE_ID": "your_voice_reference_id_here",
         "FISH_OUTPUT_FORMAT": "mp3",
         "FISH_STREAMING": "false",
@@ -92,7 +92,7 @@ export FISH_API_KEY=your_fish_audio_api_key_here
       "args": ["-y", "@zhoujinandrew/fish-audio-mcp-server"],
       "env": {
         "FISH_API_KEY": "your_fish_audio_api_key_here",
-        "FISH_MODEL_ID": "speech-1.6",
+        "FISH_MODEL_ID": "s2-pro",
         "FISH_REFERENCES": "[{'reference_id':'id1','name':'Alice','tags':['female','english']},{'reference_id':'id2','name':'Bob','tags':['male','japanese']},{'reference_id':'id3','name':'Carol','tags':['female','japanese','anime']}]",
         "FISH_DEFAULT_REFERENCE": "id1",
         "FISH_OUTPUT_FORMAT": "mp3",
@@ -112,13 +112,13 @@ export FISH_API_KEY=your_fish_audio_api_key_here
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `FISH_API_KEY` | Your Fish Audio API key | - | Yes |
-| `FISH_MODEL_ID` | TTS model to use (s1, speech-1.5, speech-1.6) | `s1` | Optional |
+| `FISH_MODEL_ID` | TTS model to use (`s2-pro`, `s1`) | `s2-pro` | Optional |
 | `FISH_REFERENCE_ID` | Default voice reference ID (single reference mode) | - | Optional |
 | `FISH_REFERENCES` | Multiple voice references (see below) | - | Optional |
 | `FISH_DEFAULT_REFERENCE` | Default reference ID when using multiple references | - | Optional |
 | `FISH_OUTPUT_FORMAT` | Default audio format (mp3, wav, pcm, opus) | `mp3` | Optional |
 | `FISH_STREAMING` | Enable streaming mode (HTTP/WebSocket) | `false` | Optional |
-| `FISH_LATENCY` | Latency mode (normal, balanced) | `balanced` | Optional |
+| `FISH_LATENCY` | Latency mode (`low`, `balanced`, `normal`) | `balanced` | Optional |
 | `FISH_MP3_BITRATE` | MP3 bitrate (64, 128, 192) | `128` | Optional |
 | `FISH_AUTO_PLAY` | Auto-play audio and enable real-time playback | `false` | Optional |
 | `AUDIO_OUTPUT_DIR` | Directory for audio file output | `~/.fish-audio-mcp/audio_output` | Optional |
@@ -166,18 +166,29 @@ Generates speech from text using Fish Audio's TTS API.
 - `reference_id` (optional): Voice model reference ID
 - `reference_name` (optional): Select voice by name
 - `reference_tag` (optional): Select voice by tag
+- `speakers` (optional, s2-pro only): Ordered list of speaker identifiers for multi-speaker dialogue. Each entry is resolved against `FISH_REFERENCES` by id → name → tag (or used as a raw reference_id when no references are configured). The index maps to `<|speaker:N|>` tags in `text`. See the multi-speaker example below.
 - `streaming` (optional): Enable streaming mode
 - `format` (optional): Output format (mp3, wav, pcm, opus)
 - `mp3_bitrate` (optional): MP3 bitrate (64, 128, 192)
+- `opus_bitrate` (optional): Opus bitrate in bps (`-1000` for auto, `24000`, `32000`, `48000`, `64000`)
+- `sample_rate` (optional): Audio sample rate in Hz (defaults to format-native rate)
 - `normalize` (optional): Enable text normalization (default: true)
-- `latency` (optional): Latency mode (normal, balanced)
+- `latency` (optional): Latency mode (`low`, `balanced`, `normal`)
 - `output_path` (optional): Custom output file path
 - `auto_play` (optional): Automatically play the generated audio
 - `websocket_streaming` (optional): Use WebSocket streaming instead of HTTP
 - `realtime_play` (optional): Play audio in real-time during WebSocket streaming
 - `speed` (optional): Speaking rate multiplier (0.5=half speed, 1.0=normal, 2.0=double speed)
 - `volume` (optional): Volume adjustment in dB (0=no change, positive=louder, negative=quieter)
+- `normalize_loudness` (optional): Normalize perceived loudness (s2-pro only, default: true)
 - `temperature` (optional): Expressiveness/emotion control (0=consistent, 1=emotional, default: 0.7)
+- `top_p` (optional): Nucleus sampling diversity (0..1, default: 0.7)
+- `chunk_length` (optional): Target text segment size (100-300, default: 300)
+- `max_new_tokens` (optional): Max audio tokens per text chunk (default: 1024)
+- `repetition_penalty` (optional): Penalty for repeating audio patterns (default: 1.2)
+- `min_chunk_length` (optional): Min characters before splitting a chunk (0-100, default: 50)
+- `condition_on_previous_chunks` (optional): Use prior audio as context for voice consistency (default: true)
+- `early_stop_threshold` (optional): Early-stop threshold for batch processing (0..1, default: 1)
 
 **Voice Selection Priority**: reference_id > reference_name > reference_tag > default
 
@@ -243,6 +254,48 @@ Claude: I'll generate Japanese speech with an anime-style voice.
 
 Result: Audio generated with anime voice style
 ```
+
+#### Multi-Speaker Dialogue (s2-pro only)
+
+Multi-speaker synthesis lets a single TTS call produce a dialogue between two or
+more configured voices. Two requirements:
+
+1. `FISH_MODEL_ID=s2-pro` (the default since 0.8.0).
+2. Configure the voices you want to use through `FISH_REFERENCES`, for example:
+
+   ```bash
+   FISH_REFERENCES='[
+     {"reference_id":"id1","name":"Alice","tags":["female","english"]},
+     {"reference_id":"id2","name":"Bob","tags":["male","japanese"]},
+     {"reference_id":"id3","name":"Carol","tags":["female","japanese","anime"]}
+   ]'
+   FISH_DEFAULT_REFERENCE="id1"
+   ```
+
+Then call the tool with the `speakers` array and embed `<|speaker:N|>` tags in
+your text. The N index lines up with the position in `speakers`:
+
+```
+User: "Have Alice and Bob greet each other."
+
+Claude: I'll synthesize a two-speaker dialogue using s2-pro.
+
+[Uses fish_audio_tts with:
+  text: "<|speaker:0|>Good morning, Bob!<|speaker:1|>Morning, Alice — how are you?<|speaker:0|>Doing great, thanks!",
+  speakers: ["Alice", "Bob"]
+]
+
+Result: Single audio file alternating between Alice's and Bob's voices.
+```
+
+Notes:
+- Each entry in `speakers` is resolved by id → name → tag against
+  `FISH_REFERENCES`. You can also pass raw reference IDs directly
+  (`speakers: ["id1", "id2"]`).
+- If you only pass one identifier, it behaves like `reference_id` — no
+  multi-speaker mode engaged.
+- Using `speakers` on a non-`s2-pro` model returns an error; switch the model
+  via `FISH_MODEL_ID=s2-pro`.
 
 #### List Available Voices
 

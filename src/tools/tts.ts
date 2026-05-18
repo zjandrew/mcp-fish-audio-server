@@ -66,6 +66,16 @@ export class TTSTool {
         description: 'MP3 bitrate in kbps (optional)',
         default: 128
       },
+      opus_bitrate: {
+        type: 'number',
+        enum: [-1000, 24000, 32000, 48000, 64000],
+        description: 'Opus bitrate in bps; -1000 = auto. Only applies when format=opus.',
+        default: -1000
+      },
+      sample_rate: {
+        type: 'number',
+        description: 'Audio sample rate in Hz. Defaults to format-native rate when omitted.'
+      },
       normalize: {
         type: 'boolean',
         description: 'Enable text normalization (optional)',
@@ -73,8 +83,8 @@ export class TTSTool {
       },
       latency: {
         type: 'string',
-        enum: ['normal', 'balanced'],
-        description: 'Latency mode (optional)',
+        enum: ['low', 'normal', 'balanced'],
+        description: 'Latency mode: low=lowest latency, balanced=reduced latency, normal=best quality',
         default: 'balanced'
       },
       output_path: {
@@ -98,12 +108,66 @@ export class TTSTool {
         description: 'Volume adjustment in dB (0=no change, positive=louder, negative=quieter)',
         default: 0
       },
+      normalize_loudness: {
+        type: 'boolean',
+        description: 'Normalize output loudness for consistent perceived volume (s2-pro only)',
+        default: true
+      },
       temperature: {
         type: 'number',
         description: 'Expressiveness/emotion control (0=consistent and calm, 1=varied and emotional)',
         minimum: 0,
         maximum: 1,
         default: 0.7
+      },
+      top_p: {
+        type: 'number',
+        description: 'Nucleus sampling diversity (0..1)',
+        minimum: 0,
+        maximum: 1,
+        default: 0.7
+      },
+      chunk_length: {
+        type: 'number',
+        description: 'Target text segment size for processing (100-300)',
+        minimum: 100,
+        maximum: 300,
+        default: 300
+      },
+      max_new_tokens: {
+        type: 'number',
+        description: 'Maximum audio tokens to generate per text chunk',
+        default: 1024
+      },
+      repetition_penalty: {
+        type: 'number',
+        description: 'Penalty for repeating audio patterns; values >1.0 reduce repetition',
+        default: 1.2
+      },
+      min_chunk_length: {
+        type: 'number',
+        description: 'Minimum characters before splitting into a new chunk (0-100)',
+        minimum: 0,
+        maximum: 100,
+        default: 50
+      },
+      condition_on_previous_chunks: {
+        type: 'boolean',
+        description: 'Use previous audio as context for voice consistency across chunks',
+        default: true
+      },
+      early_stop_threshold: {
+        type: 'number',
+        description: 'Early stopping threshold for batch processing (0..1)',
+        minimum: 0,
+        maximum: 1,
+        default: 1
+      },
+      speakers: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Multi-speaker mode (s2-pro only). Ordered list of speaker identifiers — each entry is resolved against FISH_REFERENCES by id, then name, then tag (or treated as a raw reference_id if no references are configured). The order maps to speaker tags `<|speaker:0|>`, `<|speaker:1|>`, ... in `text`. Provide at least 2 entries to engage multi-speaker; a single entry is equivalent to `reference_id`.'
       }
     },
     required: ['text']
@@ -133,24 +197,48 @@ export class TTSTool {
       }
 
       const config = loadConfig();
-      
-      // Select reference ID based on input parameters
+
+      // Resolve speakers. Multi-speaker (s2-pro only) takes precedence when 2+ entries are given.
       let selectedReferenceId: string | undefined;
-      
-      if (input.reference_id || input.reference_name || input.reference_tag) {
-        // Use reference selector if references are configured
+      let selectedReferenceIds: string[] | undefined;
+
+      const selector = new ReferenceSelector(
+        config.references || [],
+        config.defaultReference
+      );
+
+      if (input.speakers && input.speakers.length > 0) {
+        if (input.speakers.length > 1 && config.modelId !== 's2-pro') {
+          return {
+            success: false,
+            error: `Multi-speaker synthesis requires the s2-pro model (current: ${config.modelId}). Set FISH_MODEL_ID=s2-pro.`,
+          };
+        }
+        try {
+          const ids = selector.selectMany(input.speakers);
+          if (ids.length > 1) {
+            selectedReferenceIds = ids;
+          } else {
+            selectedReferenceId = ids[0];
+          }
+        } catch (err) {
+          return {
+            success: false,
+            error: err instanceof Error ? err.message : 'Failed to resolve speakers',
+          };
+        }
+      } else if (input.reference_id || input.reference_name || input.reference_tag) {
         if (config.references && config.references.length > 0) {
-          const selector = new ReferenceSelector(config.references, config.defaultReference);
           selectedReferenceId = selector.selectReference({
             id: input.reference_id,
             name: input.reference_name,
-            tag: input.reference_tag
+            tag: input.reference_tag,
           });
-          
+
           if (!selectedReferenceId && (input.reference_name || input.reference_tag)) {
             return {
               success: false,
-              error: `No reference found matching: ${input.reference_name || input.reference_tag}`
+              error: `No reference found matching: ${input.reference_name || input.reference_tag}`,
             };
           }
         } else {
@@ -163,17 +251,28 @@ export class TTSTool {
       }
       
       // Prepare parameters
-      const ttsParams = {
+      const ttsParams: TTSParams & { streaming: boolean } = {
         text: input.text,
         referenceId: selectedReferenceId,
+        referenceIds: selectedReferenceIds,
         format: (input.format || config.outputFormat) as AudioFormat,
         mp3Bitrate: (input.mp3_bitrate || config.mp3Bitrate) as Mp3Bitrate,
+        opusBitrate: input.opus_bitrate,
+        sampleRate: input.sample_rate,
         normalize: input.normalize !== false,
         latency: (input.latency || 'balanced') as LatencyMode,
         streaming: input.streaming ?? config.streaming,
         speed: input.speed,
         volume: input.volume,
+        normalizeLoudness: input.normalize_loudness,
         temperature: input.temperature,
+        topP: input.top_p,
+        chunkLength: input.chunk_length,
+        maxNewTokens: input.max_new_tokens,
+        repetitionPenalty: input.repetition_penalty,
+        minChunkLength: input.min_chunk_length,
+        conditionOnPreviousChunks: input.condition_on_previous_chunks,
+        earlyStopThreshold: input.early_stop_threshold,
       };
 
       // Determine output path

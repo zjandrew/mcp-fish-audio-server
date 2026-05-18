@@ -109,7 +109,7 @@ export function loadConfig(): Config {
   
   const config: Config = {
     apiKey,
-    modelId: process.env.FISH_MODEL_ID || 's1',
+    modelId: process.env.FISH_MODEL_ID || 's2-pro',
     referenceId: process.env.FISH_REFERENCE_ID, // Keep for backward compatibility
     references,
     defaultReference,
